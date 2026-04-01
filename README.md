@@ -17,5 +17,16 @@ Desarrollé una herramienta híbrida que automatiza la generación de propuestas
 - **VBA (Visual Basic for Applications):** Para la versión de escritorio.
 - **SQL / Query Functions:** Manejo de bases de datos de productos y precios.
 
+
+graph TD
+    A[Vendedor ingresa datos en Sheets] -->|Ejecución Script| B{Lógica Apps Script}
+    B -->|Validación| C[Cálculo de Márgenes e Impuestos]
+    C -->|Generación| D[Archivo PDF Profesional]
+    D -->|Automatización| E[Envío por Email al Cliente]
+    D -->|Respaldo| F[Registro en Base de Datos Histórica]
+    
+    style B fill:#f96,stroke:#333,stroke-width:4px
+    style E fill:#bbf,stroke:#333,stroke-width:2px
+
 ---
 > **Nota:** Para ver el funcionamiento, puedes consultar la carpeta `/docs` donde se encuentran capturas de pantalla de la interfaz y ejemplos de las macros ejecutadas.
