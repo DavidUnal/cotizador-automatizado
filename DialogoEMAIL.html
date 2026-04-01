@@ -1,0 +1,106 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <base target="_self" />
+    <style>
+      body { font-family: Arial, sans-serif; padding: 14px; }
+      label { display:block; margin-top:10px; font-size:13px; }
+      input, textarea { width:100%; padding:8px; box-sizing:border-box; }
+      textarea { height:110px; }
+      .row { margin-top:12px; display:flex; gap:10px; align-items:center; }
+      button { padding:10px 14px; cursor:pointer; }
+      #status { margin-top:10px; font-size:12px; color:#444; white-space:pre-wrap; }
+    </style>
+  </head>
+
+  <body>
+    <label>Correo destinatario</label>
+    <input id="to" type="email" placeholder="cliente@correo.com" />
+
+    <label>Asunto</label>
+    <input id="subject" type="text" value="<?!= defaultSubject ?>" />
+
+    <label>Mensaje adicional (opcional)</label>
+    <textarea id="message" placeholder="Escribe aquí un mensaje adicional..."></textarea>
+
+    <div class="row">
+      <label style="margin:0;">
+        <input id="makeDraft" type="checkbox" checked />
+        Crear borrador (recomendado)
+      </label>
+    </div>
+
+    <div class="row">
+      <button type="button" id="btnSend">Procesar</button>
+    </div>
+
+    <div id="status">Inicializando...</div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+
+      function setBusy_(busy) { $("btnSend").disabled = busy; }
+      function show_(t) { $("status").textContent = t; }
+
+      function ping_() {
+        if (!google || !google.script || !google.script.run) {
+          show_("Error: google.script.run no está disponible en este diálogo.");
+          return;
+        }
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res && res.ok) show_(res.msg);
+            else show_("Error: ping sin respuesta OK");
+          })
+          .withFailureHandler((err) => {
+            show_("Error ping: " + (err && err.message ? err.message : err));
+          })
+          .pingEmailDialog();
+      }
+
+      function submit_() {
+        if (!google || !google.script || !google.script.run) {
+          show_("Error: google.script.run no está disponible.");
+          return;
+        }
+
+        const payload = {
+          to: $("to").value,
+          subject: $("subject").value,
+          message: $("message").value,
+          makeDraft: $("makeDraft").checked
+        };
+
+        setBusy_(true);
+        show_("Procesando...");
+
+        google.script.run
+          .withSuccessHandler((res) => {
+            setBusy_(false);
+
+            if (!res || res.ok === false) {
+              show_("Error: " + (res && res.error ? res.error : "Error desconocido"));
+              return;
+            }
+
+            show_(res.mode === "draft"
+              ? "Listo: Borrador creado en Gmail."
+              : "Listo: Correo enviado."
+            );
+          })
+          .withFailureHandler((err) => {
+            setBusy_(false);
+            const msg = (err && (err.message || err.toString()))
+              ? (err.message || err.toString())
+              : JSON.stringify(err);
+            show_("Error: " + msg);
+          })
+          .sendOrDraftPdfEmail(payload);  <!-- NOMBRE NUEVO -->
+      }
+
+      $("btnSend").addEventListener("click", submit_);
+      window.addEventListener("load", ping_);
+    </script>
+  </body>
+</html>
