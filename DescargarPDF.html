@@ -1,0 +1,207 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <base target="_self" />
+    <style>
+      body { font-family: Arial, sans-serif; padding: 14px; }
+      button, a.btn { padding: 10px 14px; cursor: pointer; margin-right: 8px; }
+      a.btn { display:inline-block; border:1px solid #999; border-radius:4px; text-decoration:none; color:#000; background:#f3f3f3; }
+      .hint { font-size: 12px; opacity: .8; margin-top: 10px; }
+    </style>
+  </head>
+
+  <body>
+    <div>PDF generado: <b id="name"></b></div>
+
+    <div style="margin-top:12px;">
+      <a id="btnDownload" class="btn" href="#">Descargar</a>
+      <button id="btnSaveAs" type="button">Elegir carpeta (Guardar como…)</button>
+    </div>
+
+    <div class="hint">
+      - “Descargar” usa la carpeta de descargas configurada en tu navegador.<br>
+      - “Elegir carpeta” requiere Chrome/Edge (File System Access API).
+    </div>
+
+    <script>
+      const fileName = <?!= JSON.stringify(pdfName) ?>;
+      const b64Raw   = <?!= JSON.stringify(pdfBase64) ?>;
+
+      document.getElementById("name").textContent = fileName;
+
+      function normalizeBase64(s) {
+        s = (s || "").replace(/[\r\n\s]/g, "");
+        s = s.replace(/-/g, "+").replace(/_/g, "/"); // por si llega en base64url
+        while (s.length % 4 !== 0) s += "=";
+        return s;
+      }
+
+      function b64ToBlob(base64, mime) {
+        const b64 = normalizeBase64(base64);
+        const byteChars = atob(b64);
+        const byteNumbers = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+        return new Blob([new Uint8Array(byteNumbers)], { type: mime });
+      }
+
+      let objectUrl = null;
+
+      function prepareDownloadLink() {
+        const blob = b64ToBlob(b64Raw, "application/pdf");
+
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = URL.createObjectURL(blob);
+
+        const link = document.getElementById("btnDownload");
+        link.href = objectUrl;
+        link.download = fileName;
+        link.target = "_blank";
+        link.rel = "noopener";
+      }
+
+      async function saveAsPicker() {
+        try {
+          if (!window.showSaveFilePicker) {
+            alert(
+              "Tu navegador / entorno no soporta 'Guardar como…'.\n\n" +
+              "Opciones:\n" +
+              "1) Usa Brave (si te deja elegir carpeta).\n" +
+              "2) En Chrome activa: Configuración > Descargas > 'Preguntar dónde guardar cada archivo'."
+            );
+            return;
+          }
+
+          const blob = b64ToBlob(b64Raw, "application/pdf");
+
+          const handle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [{
+              description: "PDF",
+              accept: { "application/pdf": [".pdf"] }
+            }]
+          });
+
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+
+          alert("Guardado correctamente.");
+        } catch (err) {
+          if (err && (err.name === "AbortError" || String(err).includes("AbortError"))) return;
+
+          alert(
+            "No se pudo abrir 'Guardar como…'.\n\n" +
+            "Causa común: el navegador bloquea el selector dentro del cuadro de diálogo de Google Sheets.\n\n" +
+            "Detalle: " + (err && err.message ? err.message : err)
+          );
+        }
+      }
+
+      function openSaveAsWindow() {
+        // Abrir en ventana top-level para que Chrome permita el file picker
+        const w = window.open("", "_blank", "noopener,noreferrer,width=520,height=260");
+        if (!w) {
+          alert("Tu navegador bloqueó la ventana emergente. Permite popups para usar 'Elegir carpeta'.");
+          return;
+        }
+
+        const html = `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Guardar PDF</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; }
+    button { padding: 10px 14px; cursor: pointer; }
+    #st { margin-top: 10px; font-size: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div><b>Guardar como…</b></div>
+  <div style="margin-top:10px;">
+    <button id="go">Elegir carpeta y guardar</button>
+    <button onclick="window.close()" style="margin-left:8px;">Cerrar</button>
+  </div>
+  <div id="st"></div>
+
+  <script>
+    const fileName = ${JSON.stringify(fileName)};
+    const b64Raw = ${JSON.stringify(b64Raw)};
+
+    function normalizeBase64(s) {
+      s = (s || "").replace(/[\\r\\n\\s]/g, "");
+      s = s.replace(/-/g, "+").replace(/_/g, "/");
+      while (s.length % 4 !== 0) s += "=";
+      return s;
+    }
+
+    function b64ToBlob(base64, mime) {
+      const b64 = normalizeBase64(base64);
+      const byteChars = atob(b64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+      return new Blob([new Uint8Array(byteNumbers)], { type: mime });
+    }
+
+    async function save() {
+      const st = document.getElementById("st");
+
+      try {
+        if (!window.showSaveFilePicker) {
+          st.textContent = "Tu navegador no soporta showSaveFilePicker().";
+          return;
+        }
+
+        const blob = b64ToBlob(b64Raw, "application/pdf");
+
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [{
+            description: "PDF",
+            accept: { "application/pdf": [".pdf"] }
+          }]
+        });
+
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+
+        st.textContent = "Guardado correctamente. Puedes cerrar esta pestaña.";
+      } catch (err) {
+        if (err && err.name === "AbortError") {
+          st.textContent = "Cancelado por el usuario.";
+          return;
+        }
+        st.textContent = "Error: " + (err && err.message ? err.message : err);
+      }
+    }
+
+    document.getElementById("go").addEventListener("click", save);
+  <\/script>
+</body>
+</html>
+        `;
+
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+      }
+
+      // Preparar enlace de descarga al abrir el modal
+      try { prepareDownloadLink(); } catch (e) {}
+
+      document.getElementById("btnSaveAs").addEventListener("click", () => {
+        alert(
+          "Chrome bloquea 'Elegir carpeta' dentro de Google Sheets (restricción de seguridad).\n\n" +
+          "Solución:\n" +
+          "Chrome > Configuración > Descargas > activar 'Preguntar dónde guardar cada archivo'.\n\n" +
+          "Luego usa el botón 'Descargar'."
+        );
+      });
+
+
+    </script>
+  </body>
+</html>
